@@ -1,0 +1,41 @@
+# TRAINING PARAMETERS
+logging: False
+test_name: "test.csv"
+trials: 30 # evolutionary training
+tests: 10 # fitness evaluation
+sim_timeout: 100
+viz: False # toggle visual
+policy_pop: 10 # number of policies to evolve
+
+# PASSENGER PARAMETERS
+num_robots: 10
+budget: 2000 #Wh (robot energy)
+energy_burn_rate: 0.01 # Wh / (m/s)
+velocity: 2000 #m/timeUnit
+m_id: -1
+
+# PROBLEM PAREMETERS
+problem_size: 20 # number of tasks
+reward_range: # ignore
+  - 1 # min
+  - 10 # max
+work_range: # ignore
+  - 0 # min
+  - 0 # max
+arrival_radius: 2000 # agent proximity to task for complete
+comms_max_range: 20000 # 
+
+# ENVIRONMENT PARAMETERS
+xCoordRange:
+  - 120 # X start
+  - 190 #195 # X end
+yCoordRange:
+  - 22 # Y start
+  - 65 # Y end
+zCoordRange:
+  - 25 # Z start
+  - 25 # Z end
+xThin: 1
+yThin: 1
+zThin: 1
+flow_mag_modifier: 1000
