@@ -7,7 +7,6 @@ from control.mothership import gen_mother_from_config
 from control.passenger import generate_passengers_from_config
 from control.task import generate_tasks_from_config
 from env.environment import make_environment_from_config, Environment
-from utils.logger import FileLogger, init_logger
 from utils.visualizer import set_up_visualizer
 
 import torch
@@ -162,20 +161,25 @@ def compute_potential(env: Environment):
 
     return np.mean(inv_dists_to_nearest_task)
 
-if __name__ == "__main__":
-    test_config = "config/testing_config.yaml"
-    topo_file = "datasets/topogrophy/topography.nc"
-    tide_folder = "datasets/currents"
+
+def train(test_config,
+          topo_file,
+          tide_folder,
+          ) -> Policy:
+    """
+    Execute training loop.
+
+
+    Returns best-performing policy and training data
+    """
 
     # Load testing params
     with open(test_config, "r") as f:
         config = yaml.safe_load(f)
-        logging = config["logging"]
         verbose = config["verbose"]
         num_agents = config["num_robots"]
         num_tasks = config["problem_size"]
         agent_vel = config["velocity"]
-        test_name = config["test_name"]
         epochs = config["epochs"]
         tests = config["tests"]
         timeout = config["sim_timeout"]
@@ -190,10 +194,8 @@ if __name__ == "__main__":
 
     # === Initialize ===
 
-    # Initialize results logger here
-    if logging:
-        logger = init_logger("Simulations")
-        file_logger = FileLogger(filename=test_name)
+    # Initialize results logging
+    global_rewards_over_training = []
     
     # Initialize environment
     print("\t Environment...")
@@ -310,6 +312,7 @@ if __name__ == "__main__":
             # Evaluate fitness as average G+F over rollouts, assign to policy
             pol.fitness = np.mean(tests_rewards_with_potentials) # Fitness = G+F
             pol.reward = np.mean(tests_final_rewards)
+            global_rewards_over_training.append(pol.reward)
             if verbose: print("Policy fitness:", pol.fitness)
 
         # Select population of policies to retain (top half)
@@ -341,3 +344,7 @@ if __name__ == "__main__":
 
 
     # TODO Add visualizer for best policy
+
+    return best_policy, global_rewards_over_training
+
+

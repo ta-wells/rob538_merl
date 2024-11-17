@@ -1,6 +1,4 @@
 # TRAINING PARAMETERS
-logging: False
-test_name: "test.csv"
 epochs: 100 # evolutionary training cycles
 tests: 10 # num rollouts for fitness
 sim_timeout: 100
