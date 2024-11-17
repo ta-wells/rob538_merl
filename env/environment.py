@@ -62,9 +62,10 @@ class Environment:
             )
             
     def reset(self):
-        self.task_dict = {}
+        for t_id in self.task_dict:
+            self.task_dict[t_id].complete = False
         
-        for a_id in self.agent_loc_dict.keys():
+        for a_id in self.agent_loc_dict:
             self.agent_loc_dict[a_id] = self.base_loc
             
     def get_local_flow(self, loc):
@@ -327,7 +328,7 @@ class Environment:
 
 # TODO Update to take in a folder of tidal files for dynamic env
 def make_environment_from_config(
-    config_filepath, topo_filepath: str, tidal_folderpath: str
+    config_filepath: str, topo_filepath: str, tidal_folderpath: str
 ) -> Environment:
     """
     Create an environmnet from parameters
@@ -364,7 +365,9 @@ def make_environment_from_config(
 
         agent_loc_dict[config["m_id"]] = base_loc # loc
         
-    flow_vec_mod = config["flow_mag_modifier"]
+        flow_vec_mod = config["flow_mag_modifier"]
+
+    f.close()
 
     # TODO Process folder of tidal filepaths into list here once we start using time-varying environment
     tidal_fp = random.choice(os.listdir(tidal_folderpath))

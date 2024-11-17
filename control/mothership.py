@@ -15,7 +15,7 @@ class Mothership(Agent):
         super().__init__(id, sim_data)
         self.type = self.MOTHERSHIP
 
-
+        self.mothership_id = self.id
 
 
 def generate_mothership_with_data(id, sim_data, pssngr_list) -> Mothership:

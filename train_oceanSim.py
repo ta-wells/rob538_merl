@@ -1,119 +1,190 @@
 import time
-from argparse import ArgumentParser, Namespace
-
 import numpy as np
 import yaml
+import copy
 
 from control.mothership import gen_mother_from_config
 from control.passenger import generate_passengers_from_config
 from control.task import generate_tasks_from_config
-from env.environment import make_environment_from_config
+from env.environment import make_environment_from_config, Environment
 from utils.logger import FileLogger, init_logger
-# from utils.plotter import plot_results_from_log
 from utils.visualizer import set_up_visualizer
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-def get_args() -> Namespace:
-    """Parse the script arguments.
+# ==== NN Multi-Agent Policy Network Functions ====
 
-    Returns:
-        The parsed argument namespace.
-    """
-    parser = ArgumentParser()
+class MultiHeadedPolicyNetwork(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_actions, num_agents):
+        """
+        Initializes a multi-headed policy network.
+        
+        Args:
+            input_dim (int): The size of the input observation (M).
+            hidden_dim (int): The number of units in the hidden layers.
+            num_actions (int): The number of possible actions (N).
+            num_agents (int): The number of agents (K).
+        """
+        super(MultiHeadedPolicyNetwork, self).__init__()
+        self.trunk = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+        
+        # Create separate heads for each agent
+        self.heads = nn.ModuleList([nn.Linear(hidden_dim, num_actions) for _ in range(num_agents)])
 
-    parser.add_argument(
-        "test_config",
-        type=str,
-        help="Full path to the test configuration file",
-    )
-    parser.add_argument(
-        "topo_file",
-        type=str,
-        help="Full path to the topography data file",
-    )
-    parser.add_argument(
-        "tide_folder",
-        type=str,
-        help="Full path to the tidal data folder",
-    )
+    def forward(self, input):
+        """
+        Forward pass through the network.
+        
+        Args:
+            input (torch.Tensor): Input tensor of shape (batch_size, input_dim).
+        
+        Returns:
+            list[torch.Tensor]: A list of tensors, each of shape (batch_size, num_actions),
+                                representing action probability distributions for each agent.
+        """
+        # Pass the input through the shared backbone
+        trunk_output = self.trunk(input)
+        
+        # Generate action probabilities for each agent using separate heads
+        outputs = []
+        for head in self.heads:
+            head_output = head(trunk_output)
+            action_probs = F.softmax(head_output, dim=-1)
+            outputs.append(action_probs)
+        
+        return outputs
+    
+    def get_action(self, observation):
+        """Get actions for all agents given an observation."""
+        with torch.no_grad():
+            action_distributions = self.forward(observation)
+            actions = [torch.multinomial(probs, 1).item() for probs in action_distributions]
+        return actions
 
-    return parser.parse_args()
 
 class Policy:
     
-    def __init__(self, num_agents, num_tasks, agent_velocity) -> None:
+    def __init__(self, observation_size, hidden_dim, num_agents, action_dict, agent_velocity) -> None:
         
         self.fitness = None
-        self.action_dict = {0: [1,0,0],
-                            1: [1,1,0],
-                            2: [0,1,0],
-                            3: [-1,1,0],
-                            4: [-1,0,0],
-                            5: [-1,-1,0],
-                            6: [0,-1,0],
-                            7: [1,-1,0],
-                            }
+        self.reward = None
+        self.action_dict = action_dict 
         self.num_agents = num_agents
-        self.num_tasks = num_tasks
         self.agent_velocity = agent_velocity
         
-        # TODO Initialize Q-Network (MAKE SURE INPUT DIMS MATCH OBSERVATION DIMS)
+        self.policy_net = MultiHeadedPolicyNetwork(observation_size,
+                                                   hidden_dim,
+                                                   len(action_dict),
+                                                   num_agents)
     
     def get_action(self, observation):
         """
         8 Discrete Actions (perhaps):
         [1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1], [0,-1], [1,-1]
         """
-        # TODO Q-Network inference here
-        
-        action_id = np.random.randint(0,7)     
-        act_with_vel = np.multiply(self.action_dict[action_id], 
+
+        obs_tensor = torch.tensor(np.array(observation)).float()
+        obs_tensor = obs_tensor.flatten() # prepare network input
+
+        joint = self.policy_net.get_action(obs_tensor) # query network
+
+        actions_with_vel = []
+        for action_id in joint:
+            # process output action id's into robots joint motions
+            action = np.multiply(self.action_dict[action_id], 
                                    self.agent_velocity)
-        return act_with_vel
+            actions_with_vel.append(action)
+
+        return actions_with_vel
+
+# ==== EA Functions ====
+
+def crossover(parent1: Policy, parent2: Policy):
+    """Perform crossover between two networks."""
+    child = copy.deepcopy(parent1)
+    child.fitness = None
+    for param1, param2 in zip(child.policy_net.parameters(), parent2.policy_net.parameters()):
+        mask = torch.rand_like(param1) < 0.5
+        param1.data[mask] = param2.data[mask]
+    return child
+
+def mutate(network: Policy, mutation_rate=0.1):
+    """Mutate a network by adding noise to its parameters."""
+    for param in network.policy_net.parameters():
+        if torch.rand(1).item() < mutation_rate:
+            noise = torch.randn_like(param) * 0.1
+            param.data.add_(noise)
+
+def tournament_selection(population: list[Policy], tournament_size=3):
+    """
+    Select one individual using tournament selection. Randomly pick `tournament_size` individuals and select the one with the highest fitness.
+    """
+    policies = np.random.choice(population, tournament_size)
+    best = max(policies, key=lambda pol: pol.fitness)
+    return best
 
 
-# === TRAINING OVERVIEW ===
+# ==== Reward and PBRS Functions ====
 
-# Initialize policies
-# Initialize experience buffer
+# NOTE Eventually modify this to consider dead robots as well
+def compute_reward(env: Environment):
+    """
+    Compute global reward as sum of completed tasks.
+    """
+    return sum(t.complete for t in env.task_dict.values())
 
-# For each EA trial
-    # For each unevaluated policy, evaluate fitness:
-        # For each test (here we run policy in many random environments)
-            # Generate random environment
-            # Run simulation
-                # Log random experiences in buffer
-            # Log reward (!! Difference Rewards and/or Shaping Here)
-        # Evaluate fitness
-    # Reduce population
-    # Mutate policies, produce new offspring
+def compute_potential(env: Environment):
+    """
+    Compute a global potential function for the current environment state
+    """
+    # Let's try average distance to nearest incomplete task for each agent
+    inv_dists_to_nearest_task = []
     
-    # == Periodically, do RL on best policy using experience buffer ==
-    # Select best policy
-    # For each RL trial
-        # Sample random experience (State, Action, Rew) from buffer
-        # Action' <- Policy(State)
-        # ?? Somehow evaluate Rew of selected action vs stored ??
-        # Do a value update    
+    for a in env.agent_loc_dict:
+        if a == -1: # skip mothership
+            continue
 
+        min_dist = np.inf
+        for t in env.task_dict.values():
+            dist = np.linalg.norm(env.agent_loc_dict[a] - t.location)
+            if dist < min_dist:
+                min_dist = dist
+
+        # Append inverse because we want to provide positive reward when min_dist value goes down
+        inv_dists_to_nearest_task.append(1/min_dist)
+
+    return np.mean(inv_dists_to_nearest_task)
 
 if __name__ == "__main__":
-    args = get_args()
+    test_config = "config/testing_config.yaml"
+    topo_file = "datasets/topogrophy/topography.nc"
+    tide_folder = "datasets/currents"
 
     # Load testing params
-    with open(args.test_config, "r") as f:
-        test_config = yaml.safe_load(f)
-        logging = test_config["logging"]
-        num_agents = test_config["num_robots"]
-        num_tasks = test_config["problem_size"]
-        agent_vel = test_config["velocity"]
-        test_name = test_config["test_name"]
-        evo_trials = test_config["trials"]
-        tests = test_config["tests"]
-        timeout = test_config["sim_timeout"]
-        policy_pop = test_config["policy_pop"]
-        show_viz = test_config["viz"]
-        comms_max_range = test_config["comms_max_range"]
+    with open(test_config, "r") as f:
+        config = yaml.safe_load(f)
+        logging = config["logging"]
+        verbose = config["verbose"]
+        num_agents = config["num_robots"]
+        num_tasks = config["problem_size"]
+        agent_vel = config["velocity"]
+        test_name = config["test_name"]
+        epochs = config["epochs"]
+        tests = config["tests"]
+        timeout = config["sim_timeout"]
+        num_policies = config["num_policies"]
+        show_viz = config["viz"]
+        comms_max_range = config["comms_max_range"]
+        hidden_dim = config["hidden_dim"]
+        obs_size = 2*(num_agents + num_tasks) # (x,y) relative pos of agents+base and tasks
+    f.close()
 
     print("Initializing...")
 
@@ -126,31 +197,43 @@ if __name__ == "__main__":
     
     # Initialize environment
     print("\t Environment...")
-    env = make_environment_from_config(args.test_config,
-                                       args.topo_file,
-                                       args.tide_folder
+    env = make_environment_from_config(test_config,
+                                       topo_file,
+                                       tide_folder
                                        )
+    # Generate tasks & based (FIXED ENVIRONMENT)
+    env.task_dict = generate_tasks_from_config(test_config, env)
+    random_base = env.setup_random_base_loc()
     
     # Initialize agents
     print("\t Agents...")
-    passenger_list = generate_passengers_from_config(
-        args.test_config)
-    mothership = gen_mother_from_config(args.test_config,
-                                        passenger_list,
-                                        )
+    passenger_list = generate_passengers_from_config(test_config)
+    mothership = gen_mother_from_config(test_config, passenger_list)
+    mothership.agent_ids = [a.id for a in passenger_list]
     for p in passenger_list:
         p.agent_ids = [a.id for a in passenger_list]
         p.mothership_id = mothership.id
     
     # Initialize a population of k policies
     print("\t Policies...")
-    policies = [Policy(num_agents, num_tasks, agent_vel) for _ in range(policy_pop)]
+    action_dict ={0: [1,0,0],
+                1: [1,1,0],
+                2: [0,1,0],
+                3: [-1,1,0],
+                4: [-1,0,0],
+                5: [-1,-1,0],
+                6: [0,-1,0],
+                7: [1,-1,0],
+                }
+    policies = [Policy(obs_size, hidden_dim, num_agents, action_dict, agent_vel) for _ in range(num_policies)]
 
     print("Begin Training")
-    for tr in range(evo_trials):
+    for ep in range(epochs):
+        if ep == epochs-1: show_viz = True # Show last training cycle
+
         # High-level evolution loop
-        print("\n==== Trial", tr, " ====")
-        
+        if verbose: print("\n==== Trial", ep, " ====")
+
         # === Evaluate Policies (Rollout) ===
         
         # Loop through each unevaluated policy. All agents use pol to get action values
@@ -159,18 +242,19 @@ if __name__ == "__main__":
                 continue
         
             tests_final_rewards = [] # track final rewards from multiple tests
+            tests_rewards_with_potentials = [] # track G+F from multiple tests
+            aggr_potential = 0
+            prev_state_potential = 0
         
             # Rollout policy in multiple randomized environments
             for ts in range(tests):
-                print("\t == Test ", ts, " ==")
+
+                if verbose: print("\t == Test ", ts, " ==")
                                 
-                # Reset to random environment
-                print("\t Reset Env & Agents")
+                # Reset tasks and agent locs
+                if verbose: print("\t Reset Env & Agents")
                 env.reset()
-                random_base = env.setup_random_base_loc()
-                env.task_dict = generate_tasks_from_config(args.test_config,
-                                                           env,
-                                                           )
+
                 # Reset agents
                 mothership.reset(env)
                 for p in passenger_list:
@@ -178,31 +262,34 @@ if __name__ == "__main__":
         
                 # Start Visualizer
                 if show_viz:
-                    title = "Tr " + str(tr) + ", Ts", str(ts)
+                    title = "Tr " + str(ep) + ", Ts", str(ts)
                     viz = set_up_visualizer(env, env.task_dict, title)
 
                 # Run Simulation
                 done = False
                 step = 0
-                print("\t Start Sim")
+                if verbose: print("\t Start Sim")
                 while not done and step < timeout:
                     step += 1
                     
                     # Assemble joint action
-                    joint_action = []
                     for p in passenger_list:
                         # Update observations
-                        p.update_observation(env)
-                            
-                        # Use policy to get next action
-                        action = pol.get_action(p.observation)
-                        joint_action.append(action)
-                        
-                    # print("\t\t Step", step, " Joint Action:", joint_action)
-                    
+                        p.sense_location_from_env(env)
+                    # Update global observation (same as local)
+                    mothership.update_observation(env)
+                    # Use policy to get next joint action
+                    joint_action = pol.get_action(mothership.observation)
+
                     # Update environment
                     # (NOTE Try out different reward shaping approaches here)
+                    # TODO Add consideration for comms max range penalty
                     joint_reward, done = env.step(joint_action)
+
+                    # TODO Calculate new state potential(s) here for PBRS
+                    state_potential = compute_potential(env)
+                    aggr_potential += (state_potential-prev_state_potential) # P(s')-P(s)
+                    prev_state_potential = state_potential
                     
                     # TODO RL: Add observations, actions, rewards to replay buffer for RL
 
@@ -214,19 +301,34 @@ if __name__ == "__main__":
                 if show_viz:
                     viz.close_viz()
 
-                # Calculate final global reward, add it to reward tracker 
-                final_reward = sum(t.complete for t in env.task_dict.values())
+                # Calculate final global reward with PBRS, add it to reward tracker
+                final_reward = compute_reward(env)
                 tests_final_rewards.append(final_reward)
-                print("\t Sim Complete. Reward:", final_reward)
+                tests_rewards_with_potentials.append(final_reward + aggr_potential) # Use G+F, with F=sum(P(s')-P(s))
+                if verbose: print("\t Sim Complete. Reward:", final_reward)
                 
-            # Evaluate fitness, assign to policy
-            pol.fitness = np.mean(tests_final_rewards)
-            print("Policy fitness:", pol.fitness)
-            
+            # Evaluate fitness as average G+F over rollouts, assign to policy
+            pol.fitness = np.mean(tests_rewards_with_potentials) # Fitness = G+F
+            pol.reward = np.mean(tests_final_rewards)
+            if verbose: print("Policy fitness:", pol.fitness)
 
-        # TODO Select population of policies to retain
-        
-        # TODO Mutate some policies, flag as unevaluated
+        # Select population of policies to retain (top half)
+        policies.sort(key=lambda policy: policy.fitness, reverse=True)
+        print("Gen", ep, "Policies Fitnesses: ", [p.fitness for p in policies], " | Best Reward:", policies[0].reward)
+        new_policies = [policies[0]] # keep best policy
+
+        # Break early (no new children) if in last cycle
+        if ep == epochs-1:
+            continue
+
+        # Mutate & crossover to make new policies, flag as unevaluated
+        while len(new_policies) < num_policies:
+            parent1 = tournament_selection(policies, num_policies//3)
+            parent2 = tournament_selection(policies, num_policies//3)
+            child = crossover(parent1, parent2)
+            mutate(child)
+            new_policies.append(child)
+        policies = new_policies[:]
         
         # TODO Do some logging (like fitness that was just evaluated)
         
@@ -235,3 +337,7 @@ if __name__ == "__main__":
         
         
     # TODO After training, somehow save the best-performing policies
+    best_policy = max(policies, key=lambda policy: policy.fitness)
+
+
+    # TODO Add visualizer for best policy

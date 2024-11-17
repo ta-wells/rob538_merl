@@ -66,33 +66,32 @@ class Agent:
     def reset(self, env):
         self.task_dict = {}
         self._set_up_dim_ranges(env)
-        self._sense_location_from_env(env)
+        self.sense_location_from_env(env)
         self.load_tasks_on_agent(env)
         
     def update_observation(self, env: Environment):
+        """
+        Get global observation of all agent locations relative to mothership?
+        """
         obs_list = [] # 1D Array observation
         # Update own location
-        self._sense_location_from_env(env)
+        self.sense_location_from_env(env)
         
-        # Add mothership relative position
+        # Get mothership location
         m_loc = self._get_agent_loc_from_env(env, self.mothership_id)
-        m_rel = np.round(np.subtract(m_loc, self.location),1)
-        obs_list.append(m_rel[:2])
         
-        # Add other agent relative positions
+        # Add agent positions (relative to mothership)
         for a_id in self.agent_ids:
-            if a_id != self.id:
-                a_loc = self._get_agent_loc_from_env(env, a_id)
-                a_rel = np.round(np.subtract(a_loc, self.location),1)
-                obs_list.append(a_rel[:2])
+            a_loc = self._get_agent_loc_from_env(env, a_id)
+            a_rel = np.round(np.subtract(a_loc, m_loc),1)
+            obs_list.append(a_rel[:2])
         
-        # Add task rel positions (& capture status)
-        # TODO consider different task status repr
+        # Add task positions (relative to mothership)
         for task in env.task_dict.values():
             if task.complete:
                 obs_list.append(np.zeros(2))
             else:
-                t_rel = np.round(np.subtract(a_loc, task.location),1)
+                t_rel = np.round(np.subtract(task.location, m_loc),1)
                 obs_list.append(t_rel[:2])
         
         # TODO (Later?) Potentially use flow observations
@@ -130,7 +129,7 @@ class Agent:
 
         return model
 
-    def _sense_location_from_env(self, env: Environment):
+    def sense_location_from_env(self, env: Environment):
         """
         Sense loc from environment (location dict with keys agent id)
         """

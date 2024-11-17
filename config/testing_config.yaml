@@ -1,21 +1,23 @@
 # TRAINING PARAMETERS
 logging: False
 test_name: "test.csv"
-trials: 30 # evolutionary training
-tests: 10 # fitness evaluation
+epochs: 100 # evolutionary training cycles
+tests: 10 # num rollouts for fitness
 sim_timeout: 100
 viz: False # toggle visual
-policy_pop: 10 # number of policies to evolve
+verbose: False
+num_policies: 30 # number of policies to evolve
+hidden_dim: 64
 
 # PASSENGER PARAMETERS
-num_robots: 10
+num_robots: 4
 budget: 2000 #Wh (robot energy)
 energy_burn_rate: 0.01 # Wh / (m/s)
 velocity: 2000 #m/timeUnit
 m_id: -1
 
 # PROBLEM PAREMETERS
-problem_size: 20 # number of tasks
+problem_size: 10 # number of tasks
 reward_range: # ignore
   - 1 # min
   - 10 # max
