@@ -1,4 +1,5 @@
 from copy import deepcopy
+
 import numpy as np
 
 from control.agent import Agent, load_data_from_config
@@ -18,23 +19,23 @@ class Passenger(Agent):
         self.finished = False
         self.work_remaining = 0
 
-
         self.connected_to_M = True
 
 
     def reset(self, env):
         super().reset(env)
         self.connected_to_M = True
+        self.dead = False
    
-    def update_connectivity(self, env, comms_max_range):
-        """
-        Return true if this agent is within max_range of either the Mothership or a different 
-        agent who is connected to the motehrship
-        """
-        # Do not reconnect if lost connect
-        if not self.connected_to_M:
+    def update_state(self, env, comms_max_range):
+        self.sense_location_from_env(env)
+        self.update_self_connect(env, comms_max_range)
+        
+    def update_self_connect(self, env, comms_max_range):
+        if self.dead:
+            self.connected_to_M = False
             return
-
+        
         self.connected_to_M = False
 
         m_loc = self._get_agent_loc_from_env(env, self.mothership_id)
@@ -42,7 +43,16 @@ class Passenger(Agent):
         if m_dist < comms_max_range:
             self.connected_to_M = True
             return
-
+   
+    def check_neighbor_connect(self, env, comms_max_range):
+        """
+        Return true if this agent is within max_range of either the Mothership or a different 
+        agent who is connected to the motehrship
+        """
+        if self.dead:
+            self.connected_to_M = False
+            return
+        
         for p in self.passenger_list:
             a_loc = self._get_agent_loc_from_env(env, p.id)
             dist = np.linalg.norm(np.array(a_loc) - np.array(self.location))
@@ -50,7 +60,6 @@ class Passenger(Agent):
                 if p.connected_to_M:
                     self.connected_to_M = True
                     return
-
 
 
     # === ACTIONS ===

@@ -302,6 +302,7 @@ class Environment:
             for p in passenger_list:
                 if p.id == a_id and not p.connected_to_M:
                     a_disconnected = True
+                    p.dead = True
                     break
             if a_disconnected:
                 continue

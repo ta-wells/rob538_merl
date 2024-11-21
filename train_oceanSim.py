@@ -1,18 +1,18 @@
-import time
-import numpy as np
-import yaml
 import copy
+import time
+
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import yaml
 
 from control.mothership import gen_mother_from_config
 from control.passenger import generate_passengers_from_config
 from control.task import generate_tasks_from_config
-from env.environment import make_environment_from_config, Environment
+from env.environment import Environment, make_environment_from_config
 from utils.visualizer import set_up_visualizer
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 # ==== NN Multi-Agent Policy Network Functions ====
 
@@ -91,7 +91,7 @@ class Policy:
         """
 
         obs_tensor = torch.tensor(np.array(observation)).float()
-        obs_tensor = obs_tensor.flatten() # prepare network input
+        # obs_tensor = obs_tensor.flatten() # prepare network input
 
         joint = self.policy_net.get_action(obs_tensor) # query network
 
@@ -175,25 +175,26 @@ def moving_min_max(data, window_size):
     max_vals = np.array([np.max(data[i:i+window_size]) for i in range(len(data) - window_size + 1)])
     return min_vals, max_vals
 
-def plot_global_reward_avg(rewards_list, window_size=10):
-     window_size = 25
-     fig = plt.figure()
-     plt.tight_layout()
+def plot_global_reward_avg(rewards_list, window_size=10, figname="test.png"):
+    window_size = 25
+    fig = plt.figure()
+    plt.tight_layout()
 
-     avg_rewards = moving_average(rewards_list, window_size)
+    avg_rewards = moving_average(rewards_list, window_size)
     #  min_vals, max_vals = moving_min_max(rewards_list, window_size)
 
-     x_range = range(window_size - 1, len(rewards_list))
-     plt.plot(x_range, avg_rewards)
+    x_range = range(window_size - 1, len(rewards_list))
+    plt.plot(x_range, avg_rewards)
 
-     # Plot the band between min and max values within the window
+    # Plot the band between min and max values within the window
     #  plt.fill_between(x_range, min_vals, max_vals, alpha=0.2)
 
-     plt.title("Running Average Global Reward over Training", y=1.1)
-     plt.ylabel("Reward")
-     plt.xlabel("Training")
+    plt.title("Running Average Global Reward over Training", y=1.1)
+    plt.ylabel("Reward")
+    plt.xlabel("Training")
     #  plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), ncols=4)
-     plt.show()
+    plt.savefig(figname)
+    plt.show()
 
 
 
@@ -222,7 +223,7 @@ def train(test_config,
         show_viz = config["viz"]
         comms_max_range = config["comms_max_range"]
         hidden_dim = config["hidden_dim"]
-        obs_size = 2*(num_agents + num_tasks) # (x,y) relative pos of agents+base and tasks
+        obs_size = 1+3*(num_agents + num_tasks) # time step + (x,y) relative pos of agents+base and tasks + task status
         potentials = config["potentials"]
     f.close()
 
@@ -288,6 +289,11 @@ def train(test_config,
         
             # Rollout policy in multiple randomized environments
             for ts in range(tests):
+                # Visualize first test of policy
+                if ep == epochs-1 and ts == 0:
+                    show_viz = True
+                else:
+                    show_viz = False
 
                 if verbose: print("\t == Test ", ts, " ==")
                                 
@@ -315,19 +321,19 @@ def train(test_config,
                     # Assemble joint action
                     for p in passenger_list:
                         # Update observations
-                        p.sense_location_from_env(env)
-                        p.update_connectivity(env, comms_max_range)
+                        p.update_state(env, comms_max_range)
+                    for p in passenger_list:
+                        p.check_neighbor_connect(env, comms_max_range)
                     # Update global observation (same as local)
-                    mothership.update_observation(env)
+                    mothership.update_observation(env, step)
                     # Use policy to get next joint action
                     joint_action = pol.get_action(mothership.observation)
 
                     # Update environment
                     # (NOTE Try out different reward shaping approaches here)
-                    # TODO Add consideration for comms max range penalty
                     joint_reward, done = env.step(joint_action, passenger_list)
 
-                    # TODO Calculate new state potential(s) here for PBRS
+                    # Calculate new state potential(s) here for PBRS
                     if potentials:
                         state_potential = compute_potential(env)
                         aggr_potential += (state_potential-prev_state_potential) # P(s')-P(s)
@@ -337,7 +343,7 @@ def train(test_config,
 
                     # Opt. update visual
                     if show_viz:
-                        viz.display_env(passenger_list, static=False)
+                        viz.display_env(passenger_list + [mothership], static=False)
                         time.sleep(0.05)
 
                 if show_viz:

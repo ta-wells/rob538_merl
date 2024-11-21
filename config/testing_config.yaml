@@ -1,7 +1,7 @@
 # TRAINING PARAMETERS
 epochs: 100 # evolutionary training cycles
-tests: 10 # num rollouts for fitness
-sim_timeout: 100
+tests: 5 # num rollouts for fitness
+sim_timeout: 50
 viz: False # toggle visual
 verbose: False
 num_policies: 30 # number of policies to evolve

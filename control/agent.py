@@ -70,7 +70,7 @@ class Agent:
         self.sense_location_from_env(env)
         self.load_tasks_on_agent(env)
         
-    def update_observation(self, env: Environment):
+    def update_observation(self, env: Environment, step):
         """
         Get global observation of all agent locations relative to mothership?
         """
@@ -84,26 +84,30 @@ class Agent:
         # Add agent positions (relative to mothership)
         for p in self.passenger_list:
             a_loc = self._get_agent_loc_from_env(env, p.id)
-            a_rel = np.round(np.subtract(a_loc, m_loc), 1)
+            a_rel = np.round(np.subtract(a_loc, m_loc), 1)[:2]
             if p.connected_to_M:
-                obs_list.append(a_rel[:2] + [1.0])
+                a_state = np.concatenate((a_rel, [1.0]))
             else:
-                obs_list.append(a_rel[:2] + [0.0])
+                a_state = np.concatenate((a_rel, [0.0]))
+            obs_list.append(a_state)
         
         # Add task positions (relative to mothership)
         for task in env.task_dict.values():
-            t_rel = np.round(np.subtract(task.location, m_loc),1)
+            t_rel = np.round(np.subtract(task.location, m_loc),1)[:2]
             if task.complete:
-                obs_list.append(t_rel[:2] + [1.0])
+                t_state = np.concatenate((t_rel, [1.0]))
             else:
-                obs_list.append(t_rel[:2] + [0.0])
+                t_state = np.concatenate((t_rel, [0.0]))
+            obs_list.append(t_state)
         
         # TODO (Later?) Potentially use flow observations
         # self._sense_flow_from_env(env)
         # self._apply_observations_to_model()
         
         # Store observation as numpy array
-        self.observation = np.array(obs_list)
+        self.observation = np.array(obs_list).flatten()
+        # Add time step to observation
+        self.observation = np.concatenate((self.observation, [step]))
         
 
     # === TASK FUNCTIONS ===
@@ -233,6 +237,7 @@ class Agent:
 # Setup functions
 
 def load_data_from_config(sim_data_fp, rand_base=None):
+    
     """
     Load in problem and solver data for agents to use during operations
     """
