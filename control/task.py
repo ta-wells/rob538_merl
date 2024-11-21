@@ -38,27 +38,42 @@ def generate_tasks_from_config(problem_config_fp, env):
         config = yaml.safe_load(f)
 
         task_dict = {}
+        
+        if config["random_tasks"]:
 
-        for i in range(config["problem_size"]):
+            for i in range(config["problem_size"]):
 
-            dim_ranges = env.get_dim_ranges()
-            x = sample_from_range(dim_ranges[0][0],
-                                  dim_ranges[0][1])
-            y = sample_from_range(dim_ranges[1][0],
-                                  dim_ranges[1][1])
-            z = sample_from_range(dim_ranges[2][0],
-                                  dim_ranges[2][1])
+                dim_ranges = env.get_dim_ranges()
+                x = sample_from_range(dim_ranges[0][0],
+                                    dim_ranges[0][1])
+                y = sample_from_range(dim_ranges[1][0],
+                                    dim_ranges[1][1])
+                z = sample_from_range(dim_ranges[2][0],
+                                    dim_ranges[2][1])
 
-            work = sample_from_range(config["work_range"][0],
-                                     config["work_range"][1])
-            reward = sample_from_range(config["reward_range"][0],
-                                       config["reward_range"][1])
-            thresh = config["arrival_radius"]
+                work = sample_from_range(config["work_range"][0],
+                                        config["work_range"][1])
+                reward = sample_from_range(config["reward_range"][0],
+                                        config["reward_range"][1])
+                thresh = config["arrival_radius"]
+                task_dict["v"+str(i)] = Task("v"+str(i),
+                                            np.array([x, y, z]), 
+                                            work,
+                                            reward, 
+                                            thresh)
+        else:
+            for i, loc in enumerate(config["task_locs"]):
+                work = sample_from_range(config["work_range"][0],
+                                        config["work_range"][1])
+                reward = sample_from_range(config["reward_range"][0],
+                                        config["reward_range"][1])
+                thresh = config["arrival_radius"]
 
-            task_dict["v"+str(i)] = Task("v"+str(i),
-                                         np.array([x, y, z]), 
-                                         work,
-                                         reward, 
-                                         thresh)
-
+                task_dict["v"+str(i)] = Task("v"+str(i),
+                                            np.array(loc), 
+                                            work,
+                                            reward, 
+                                            thresh)
+                
+            
     return task_dict

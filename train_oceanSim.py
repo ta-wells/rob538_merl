@@ -189,9 +189,9 @@ def plot_global_reward_avg(rewards_list, window_size=10, figname="test.png"):
     # Plot the band between min and max values within the window
     #  plt.fill_between(x_range, min_vals, max_vals, alpha=0.2)
 
-    plt.title("Running Average Global Reward over Training", y=1.1)
+    plt.title("Running Average Global Reward over Training")
     plt.ylabel("Reward")
-    plt.xlabel("Training")
+    plt.xlabel("Policies")
     #  plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), ncols=4)
     plt.savefig(figname)
     plt.show()
@@ -222,6 +222,8 @@ def train(test_config,
         num_policies = config["num_policies"]
         show_viz = config["viz"]
         comms_max_range = config["comms_max_range"]
+        random_base = config["random_base"]
+        base_loc = config["base_loc"]
         hidden_dim = config["hidden_dim"]
         obs_size = 1+3*(num_agents + num_tasks) # time step + (x,y) relative pos of agents+base and tasks + task status
         potentials = config["potentials"]
@@ -240,9 +242,11 @@ def train(test_config,
                                        topo_file,
                                        tide_folder
                                        )
-    # Generate tasks & based (FIXED ENVIRONMENT)
+    # Generate tasks & base
     env.task_dict = generate_tasks_from_config(test_config, env)
-    random_base = env.setup_random_base_loc()
+    env.setup_base_loc(random_base, base_loc)
+    # print([task.location for task in env.task_dict.values()])
+    # print(env.base_loc)
     
     # Initialize agents
     print("\t Agents...")
@@ -395,7 +399,7 @@ def train(test_config,
 
 
 if __name__ == "__main__":
-    test_config = "config/testing_config.yaml"
+    test_config = "config/baseline_config.yaml"
     topo_file = "datasets/topogrophy/topography.nc"
     tide_folder = "datasets/currents"
 

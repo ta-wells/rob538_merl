@@ -1,0 +1,50 @@
+# TRAINING PARAMETERS
+epochs: 100 # evolutionary training cycles
+tests: 5 # num rollouts for fitness
+sim_timeout: 50
+viz: False # toggle visual
+verbose: False
+num_policies: 30 # number of policies to evolve
+hidden_dim: 64
+potentials: False
+
+# PASSENGER PARAMETERS
+num_robots: 4
+budget: 2000 #Wh (robot energy)
+energy_burn_rate: 0.01 # Wh / (m/s)
+velocity: 2000 #m/timeUnit
+m_id: -1
+
+# PROBLEM PAREMETERS
+problem_size: 4 # number of tasks = len(task_locs)
+random_base: False
+base_loc: [0.0, 90000.0, 0.0] # [x,y,z]
+random_tasks: False
+task_locs: # [x,y,z]
+  - [30000.0, 90000.0, 0.0]
+  - [0.0, 120000, 0.0]
+  - [-30000.0, 90000.0, 0.0]
+  - [0.0, 60000.0, 0.0]
+reward_range: # ignore
+  - 1 # min
+  - 1 # max
+work_range: # ignore
+  - 0 # min
+  - 0 # max
+arrival_radius: 2000 # agent proximity to task for complete
+comms_max_range: 20000 # 
+
+# ENVIRONMENT PARAMETERS
+xCoordRange:
+  - 120 # X start
+  - 190 #195 # X end
+yCoordRange:
+  - 22 # Y start
+  - 65 # Y end
+zCoordRange:
+  - 25 # Z start
+  - 25 # Z end
+xThin: 1
+yThin: 1
+zThin: 1
+flow_mag_modifier: 1000

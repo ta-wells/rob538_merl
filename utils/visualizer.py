@@ -132,7 +132,7 @@ class Visualizer:
 
         # Plot the flow
         # print('Plotting flow ...')
-        self._add_flow_to_plot(x, y, z)
+        # self._add_flow_to_plot(x, y, z)
 
         # Plot the tasks
         self._add_tasks_to_plot()

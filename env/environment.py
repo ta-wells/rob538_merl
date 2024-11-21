@@ -267,6 +267,21 @@ class Environment:
         else:
             return ((x_min, x_max), (y_min, y_max), (0, 0))
 
+
+    def setup_base_loc(self, random_base, base_loc):
+        
+        if random_base:
+            self.setup_random_base_loc()
+        else:
+            self.base_loc = base_loc
+            for a in self.agent_loc_dict.keys():
+                loc = base_loc[:]
+                loc[0] = base_loc[0] + random.randint(10, 1000)
+                loc[1] = base_loc[1] + random.randint(10, 1000)
+                loc[2] = base_loc[2] + random.randint(10, 1000)
+
+                self.agent_loc_dict[a] = loc
+
     def setup_random_base_loc(self):
         ranges = self.get_dim_ranges()
         base_x = np.random.randint(ranges[0][0], ranges[0][1])
@@ -284,8 +299,6 @@ class Environment:
             loc[2] = base_loc[2] + random.randint(10, 1000)
 
             self.agent_loc_dict[a] = loc
-
-        return base_loc
 
     def step(self, joint_action, passenger_list):
         """
