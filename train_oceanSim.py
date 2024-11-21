@@ -2,6 +2,7 @@ import time
 import numpy as np
 import yaml
 import copy
+import matplotlib.pyplot as plt
 
 from control.mothership import gen_mother_from_config
 from control.passenger import generate_passengers_from_config
@@ -133,11 +134,14 @@ def tournament_selection(population: list[Policy], tournament_size=3):
 # ==== Reward and PBRS Functions ====
 
 # NOTE Eventually modify this to consider dead robots as well
-def compute_reward(env: Environment):
+def compute_global_reward(env: Environment, passenger_list):
     """
     Compute global reward as sum of completed tasks.
     """
-    return sum(t.complete for t in env.task_dict.values())
+    task_reward = sum(t.complete for t in env.task_dict.values())
+    comms_reward = sum(p.connected_to_M for p in passenger_list)
+
+    return task_reward+comms_reward
 
 def compute_potential(env: Environment):
     """
@@ -160,6 +164,37 @@ def compute_potential(env: Environment):
         inv_dists_to_nearest_task.append(1/min_dist)
 
     return np.mean(inv_dists_to_nearest_task)
+
+
+def moving_average(data, window_size):
+    return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
+
+def moving_min_max(data, window_size):
+    # Compute rolling minimum and maximum for each window
+    min_vals = np.array([np.min(data[i:i+window_size]) for i in range(len(data) - window_size + 1)])
+    max_vals = np.array([np.max(data[i:i+window_size]) for i in range(len(data) - window_size + 1)])
+    return min_vals, max_vals
+
+def plot_global_reward_avg(rewards_list, window_size=10):
+     window_size = 25
+     fig = plt.figure()
+     plt.tight_layout()
+
+     avg_rewards = moving_average(rewards_list, window_size)
+    #  min_vals, max_vals = moving_min_max(rewards_list, window_size)
+
+     x_range = range(window_size - 1, len(rewards_list))
+     plt.plot(x_range, avg_rewards)
+
+     # Plot the band between min and max values within the window
+    #  plt.fill_between(x_range, min_vals, max_vals, alpha=0.2)
+
+     plt.title("Running Average Global Reward over Training", y=1.1)
+     plt.ylabel("Reward")
+     plt.xlabel("Training")
+    #  plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), ncols=4)
+     plt.show()
+
 
 
 def train(test_config,
@@ -188,6 +223,7 @@ def train(test_config,
         comms_max_range = config["comms_max_range"]
         hidden_dim = config["hidden_dim"]
         obs_size = 2*(num_agents + num_tasks) # (x,y) relative pos of agents+base and tasks
+        potentials = config["potentials"]
     f.close()
 
     print("Initializing...")
@@ -212,8 +248,10 @@ def train(test_config,
     passenger_list = generate_passengers_from_config(test_config)
     mothership = gen_mother_from_config(test_config, passenger_list)
     mothership.agent_ids = [a.id for a in passenger_list]
+    mothership.passenger_list = passenger_list
     for p in passenger_list:
         p.agent_ids = [a.id for a in passenger_list]
+        p.passenger_list = passenger_list
         p.mothership_id = mothership.id
     
     # Initialize a population of k policies
@@ -278,6 +316,7 @@ def train(test_config,
                     for p in passenger_list:
                         # Update observations
                         p.sense_location_from_env(env)
+                        p.update_connectivity(env, comms_max_range)
                     # Update global observation (same as local)
                     mothership.update_observation(env)
                     # Use policy to get next joint action
@@ -286,12 +325,13 @@ def train(test_config,
                     # Update environment
                     # (NOTE Try out different reward shaping approaches here)
                     # TODO Add consideration for comms max range penalty
-                    joint_reward, done = env.step(joint_action)
+                    joint_reward, done = env.step(joint_action, passenger_list)
 
                     # TODO Calculate new state potential(s) here for PBRS
-                    state_potential = compute_potential(env)
-                    aggr_potential += (state_potential-prev_state_potential) # P(s')-P(s)
-                    prev_state_potential = state_potential
+                    if potentials:
+                        state_potential = compute_potential(env)
+                        aggr_potential += (state_potential-prev_state_potential) # P(s')-P(s)
+                        prev_state_potential = state_potential
                     
                     # TODO RL: Add observations, actions, rewards to replay buffer for RL
 
@@ -304,7 +344,7 @@ def train(test_config,
                     viz.close_viz()
 
                 # Calculate final global reward with PBRS, add it to reward tracker
-                final_reward = compute_reward(env)
+                final_reward = compute_global_reward(env, passenger_list)
                 tests_final_rewards.append(final_reward)
                 tests_rewards_with_potentials.append(final_reward + aggr_potential) # Use G+F, with F=sum(P(s')-P(s))
                 if verbose: print("\t Sim Complete. Reward:", final_reward)
@@ -348,3 +388,11 @@ def train(test_config,
     return best_policy, global_rewards_over_training
 
 
+if __name__ == "__main__":
+    test_config = "config/testing_config.yaml"
+    topo_file = "datasets/topogrophy/topography.nc"
+    tide_folder = "datasets/currents"
+
+    best_policy, global_rewards_over_training = train(test_config, topo_file, tide_folder)
+
+    plot_global_reward_avg(global_rewards_over_training)

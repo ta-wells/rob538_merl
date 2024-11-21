@@ -27,7 +27,8 @@ class Agent:
         self.travel_remaining = 0
 
         self.agent_ids = []
-        self.mothership_id = None 
+        self.mothership_id = None
+        self.passenger_list = None
 
         self.stored_reward_sum = 1
         self.last_msg_content = None
@@ -81,18 +82,21 @@ class Agent:
         m_loc = self._get_agent_loc_from_env(env, self.mothership_id)
         
         # Add agent positions (relative to mothership)
-        for a_id in self.agent_ids:
-            a_loc = self._get_agent_loc_from_env(env, a_id)
-            a_rel = np.round(np.subtract(a_loc, m_loc),1)
-            obs_list.append(a_rel[:2])
+        for p in self.passenger_list:
+            a_loc = self._get_agent_loc_from_env(env, p.id)
+            a_rel = np.round(np.subtract(a_loc, m_loc), 1)
+            if p.connected_to_M:
+                obs_list.append(a_rel[:2] + [1.0])
+            else:
+                obs_list.append(a_rel[:2] + [0.0])
         
         # Add task positions (relative to mothership)
         for task in env.task_dict.values():
+            t_rel = np.round(np.subtract(task.location, m_loc),1)
             if task.complete:
-                obs_list.append(np.zeros(2))
+                obs_list.append(t_rel[:2] + [1.0])
             else:
-                t_rel = np.round(np.subtract(task.location, m_loc),1)
-                obs_list.append(t_rel[:2])
+                obs_list.append(t_rel[:2] + [0.0])
         
         # TODO (Later?) Potentially use flow observations
         # self._sense_flow_from_env(env)

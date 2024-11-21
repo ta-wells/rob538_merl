@@ -287,7 +287,7 @@ class Environment:
 
         return base_loc
 
-    def step(self, joint_action):
+    def step(self, joint_action, passenger_list):
         """
         Advance global actual environment by one time step. Updates robot locations & energy levels. FUTURE: Updates flow field.
         
@@ -297,6 +297,15 @@ class Environment:
         """
         # Take actions, complete tasks
         for a_id, act in enumerate(joint_action):
+            # Check agent connection - don't move if disconnected
+            a_disconnected = False
+            for p in passenger_list:
+                if p.id == a_id and not p.connected_to_M:
+                    a_disconnected = True
+                    break
+            if a_disconnected:
+                continue
+
             # Update agent location
             new_loc = self.agent_loc_dict[a_id] + act
             if self._check_is_loc_in_env(self.get_dim_ranges(),
@@ -309,8 +318,6 @@ class Environment:
                     continue
                 if np.abs(np.linalg.norm(task.location-self.agent_loc_dict[a_id])) <= task.arrival_thresh:
                     task.complete = True
-               
-        # TODO Compute shaped rewards
              
         # Check if done, compute global reward
         num_complete_tasks = 0

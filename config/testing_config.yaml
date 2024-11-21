@@ -6,6 +6,7 @@ viz: False # toggle visual
 verbose: False
 num_policies: 30 # number of policies to evolve
 hidden_dim: 64
+potentials: False
 
 # PASSENGER PARAMETERS
 num_robots: 4
@@ -18,7 +19,7 @@ m_id: -1
 problem_size: 10 # number of tasks
 reward_range: # ignore
   - 1 # min
-  - 10 # max
+  - 1 # max
 work_range: # ignore
   - 0 # min
   - 0 # max

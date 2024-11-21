@@ -1,4 +1,5 @@
 from copy import deepcopy
+import numpy as np
 
 from control.agent import Agent, load_data_from_config
 from control.task import Task
@@ -17,7 +18,41 @@ class Passenger(Agent):
         self.finished = False
         self.work_remaining = 0
 
+
+        self.connected_to_M = True
+
+
+    def reset(self, env):
+        super().reset(env)
+        self.connected_to_M = True
    
+    def update_connectivity(self, env, comms_max_range):
+        """
+        Return true if this agent is within max_range of either the Mothership or a different 
+        agent who is connected to the motehrship
+        """
+        # Do not reconnect if lost connect
+        if not self.connected_to_M:
+            return
+
+        self.connected_to_M = False
+
+        m_loc = self._get_agent_loc_from_env(env, self.mothership_id)
+        m_dist = np.linalg.norm(np.array(m_loc) - np.array(self.location))
+        if m_dist < comms_max_range:
+            self.connected_to_M = True
+            return
+
+        for p in self.passenger_list:
+            a_loc = self._get_agent_loc_from_env(env, p.id)
+            dist = np.linalg.norm(np.array(a_loc) - np.array(self.location))
+            if dist < comms_max_range:
+                if p.connected_to_M:
+                    self.connected_to_M = True
+                    return
+
+
+
     # === ACTIONS ===
 
     def action_update(self, comms_mgr):
