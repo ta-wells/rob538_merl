@@ -143,6 +143,16 @@ def compute_global_reward(env: Environment, passenger_list):
 
     return task_reward+comms_reward
 
+def compute_dense_local_reward(env: Environment):
+    """
+    L(s) = 1/(dist to nearest_incomplete_task) * comm_i
+    
+    So we gain some reward for moving closer to an incomplete task, but gain no reward if we have lost connection.
+    """
+    
+    
+    return 0
+
 def compute_potential(env: Environment):
     """
     Compute a global potential function for the current environment state
@@ -294,10 +304,10 @@ def train(test_config,
             # Rollout policy in multiple randomized environments
             for ts in range(tests):
                 # Visualize first test of policy
-                if ep == epochs-1 and ts == 0:
-                    show_viz = True
-                else:
-                    show_viz = False
+                # if ep == epochs-1 and ts == 0:
+                #     show_viz = True
+                # else:
+                #     show_viz = False
 
                 if verbose: print("\t == Test ", ts, " ==")
                                 
@@ -335,7 +345,7 @@ def train(test_config,
 
                     # Update environment
                     # (NOTE Try out different reward shaping approaches here)
-                    joint_reward, done = env.step(joint_action, passenger_list)
+                    done = env.step(joint_action, passenger_list)
 
                     # Calculate new state potential(s) here for PBRS
                     if potentials:

@@ -341,10 +341,9 @@ class Environment:
                 done = False
             else:
                 num_complete_tasks += 1
-                
-        joint_reward = np.full(len(joint_action), num_complete_tasks)        
+                   
 
-        return joint_reward, done
+        return done
 
 
 # TODO Update to take in a folder of tidal files for dynamic env
