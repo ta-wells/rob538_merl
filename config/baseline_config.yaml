@@ -8,6 +8,12 @@ num_policies: 30 # number of policies to evolve
 hidden_dim: 64
 potentials: False
 
+buffer_size: 1000
+batch_size: 50
+alpha: 0.01
+gamma: 0.9
+epsilon: 1.0
+
 # PASSENGER PARAMETERS
 num_robots: 4
 budget: 2000 #Wh (robot energy)
