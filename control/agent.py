@@ -109,7 +109,48 @@ class Agent:
         # Add time step to observation
         self.observation = np.concatenate((self.observation, [step]))
         
+    def compute_dense_reward(self, env: Environment):
+      reward_list = []
+      incomplete_list = []
+      connected = 0
+      #L_i(s) = 1/d_min * comm_i where d_min minimum distance to uncompleted reward
+      #Make list of uncomplete tasks for computing
+      for task in env.task_dict.values():
+        if not task.complete:
+          incomplete_list.append(task)
+      
+      #Iterate over all passengers
+      for p in self.passenger_list:
+        #Check if we have connected to the mothership
+        if p.connected_to_M:
+          connected = 1
+        else:
+          connected = 0
+        
+        #Get agent position
+        a_loc = self._get_agent_loc_from_env(env, p.id)
 
+        #Find distance to closest incomplete task
+        for n,task_incomp in enumerate(incomplete_list):
+          
+          #Calculate Distance
+          d_rel = np.linalg.norm((np.subtract(task.location, a_loc),1)[:2])
+          
+          #If first calc, set to min
+          if n == 0:
+            d_min = d_rel
+          
+          #if less, set new minimum
+          if d_rel < d_min:
+            d_min = d_rel
+        
+        #Now calculate reward and append to list
+        L_i = 1/d_min*connected
+        reward_list.append(L_i)
+      
+      return reward_list
+
+    # ===============================================    
     # === TASK FUNCTIONS ===
 
     def _create_local_task(self, id: int, loc: tuple, work: int, reward: int, thresh: int):
