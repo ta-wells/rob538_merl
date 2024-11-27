@@ -60,14 +60,20 @@ class Environment:
                 self.processed_flow_data[self.flow_data_idx],
                 self.processed_flow_data[self.flow_data_idx + 1],
             )
-            
+        
+        #Initialize list with number of tasks completed per agent 
+        self.agent_done_list = [0] * len(self.agent_loc_dict)  
+        
     def reset(self):
         for t_id in self.task_dict:
             self.task_dict[t_id].complete = False
         
         for a_id in self.agent_loc_dict:
             self.agent_loc_dict[a_id] = self.base_loc
-            
+        
+        #Reset list with number of tasks completed per agent 
+        self.agent_done_list = [0] * len(self.agent_loc_dict)  
+        
     def get_local_flow(self, loc):
         """
         Get the local flow vector at a given location
@@ -332,6 +338,8 @@ class Environment:
                     continue
                 if np.abs(np.linalg.norm(task.location-self.agent_loc_dict[a_id])) <= task.arrival_thresh:
                     task.complete = True
+                    #Update number of tasks performed
+                    self.agent_done_list[a_id] += 1
              
         # Check if done, compute global reward
         num_complete_tasks = 0
